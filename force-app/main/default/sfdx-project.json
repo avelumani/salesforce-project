@@ -1,7 +1,7 @@
 {
   "packageDirectories": [
     {
-      "path": "Salesforce-Project",
+      "path": "force-app",
       "default": true
     }
   ],
