@@ -4,136 +4,143 @@
         <itemInstances>
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>collapsed</name>
+                    <n>collapsed</n>
                     <value>false</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
-                    <name>enableActionsConfiguration</name>
+                    <n>enableActionsConfiguration</n>
                     <value>false</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
-                    <name>hideChatterActions</name>
+                    <n>hideChatterActions</n>
                     <value>false</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
-                    <name>numVisibleActions</name>
+                    <n>numVisibleActions</n>
                     <value>3</value>
                 </componentInstanceProperties>
                 <componentName>force:highlightsPanel</componentName>
+                <identifier>highlightsPanel</identifier>
             </componentInstance>
         </itemInstances>
         <mode>Replace</mode>
-        <name>header</name>
+        <n>header</n>
         <type>Region</type>
     </flexiPageRegions>
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>relatedListComponentOverride</name>
+                    <n>relatedListComponentOverride</n>
                     <value>NONE</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
-                    <name>rowsToDisplay</name>
+                    <n>rowsToDisplay</n>
                     <value>10</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
-                    <name>showActionBar</name>
+                    <n>showActionBar</n>
                     <value>true</value>
                 </componentInstanceProperties>
                 <componentName>force:relatedListContainer</componentName>
+                <identifier>relatedListContainer</identifier>
             </componentInstance>
         </itemInstances>
         <mode>Replace</mode>
-        <name>relatedTabContent</name>
+        <n>relatedTabContent</n>
         <type>Facet</type>
     </flexiPageRegions>
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
                 <componentName>force:detailPanel</componentName>
+                <identifier>detailPanel</identifier>
             </componentInstance>
         </itemInstances>
         <mode>Replace</mode>
-        <name>detailTabContent</name>
+        <n>detailTabContent</n>
         <type>Facet</type>
     </flexiPageRegions>
     <flexiPageRegions>
-        <name>Facet-4a5e3cc1-2388-4423-9631-3276ac59075e</name>
+        <n>Facet-4a5e3cc1-2388-4423-9631-3276ac59075e</n>
         <type>Facet</type>
     </flexiPageRegions>
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>body</name>
+                    <n>body</n>
                     <value>relatedTabContent</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
-                    <name>title</name>
+                    <n>title</n>
                     <value>Standard.Tab.relatedLists</value>
                 </componentInstanceProperties>
                 <componentName>flexipage:tab</componentName>
+                <identifier>tabRelated</identifier>
             </componentInstance>
         </itemInstances>
         <itemInstances>
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>active</name>
+                    <n>active</n>
                     <value>true</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
-                    <name>body</name>
+                    <n>body</n>
                     <value>detailTabContent</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
-                    <name>title</name>
+                    <n>title</n>
                     <value>Standard.Tab.detail</value>
                 </componentInstanceProperties>
                 <componentName>flexipage:tab</componentName>
+                <identifier>tabDetail</identifier>
             </componentInstance>
         </itemInstances>
         <itemInstances>
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>body</name>
+                    <n>body</n>
                     <value>Facet-4a5e3cc1-2388-4423-9631-3276ac59075e</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
-                    <name>title</name>
+                    <n>title</n>
                     <value>My Events</value>
                 </componentInstanceProperties>
                 <componentName>flexipage:tab</componentName>
+                <identifier>tabMyEvents</identifier>
             </componentInstance>
         </itemInstances>
         <mode>Replace</mode>
-        <name>maintabs</name>
+        <n>maintabs</n>
         <type>Facet</type>
     </flexiPageRegions>
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>tabs</name>
+                    <n>tabs</n>
                     <value>maintabs</value>
                 </componentInstanceProperties>
                 <componentName>flexipage:tabset</componentName>
+                <identifier>tabset</identifier>
             </componentInstance>
         </itemInstances>
         <mode>Replace</mode>
-        <name>main</name>
+        <n>main</n>
         <type>Region</type>
     </flexiPageRegions>
     <flexiPageRegions>
         <mode>Replace</mode>
-        <name>sidebar</name>
+        <n>sidebar</n>
         <type>Region</type>
     </flexiPageRegions>
     <masterLabel>Attendee Record Page</masterLabel>
     <parentFlexiPage>flexipage__default_rec_L</parentFlexiPage>
     <sobjectType>Attendee__c</sobjectType>
     <template>
-        <name>flexipage:recordHomeTemplateDesktop</name>
+        <n>flexipage:recordHomeTemplateDesktop</n>
     </template>
     <type>RecordPage</type>
 </FlexiPage>
