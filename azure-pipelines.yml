@@ -1,0 +1,109 @@
+# azure-pipelines.yml
+trigger:
+  branches:
+    include:
+      - main          # Trigger on push to main
+      - develop       # Trigger on push to develop
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: Salesforce-DevOrg-Vars   # Links to the variable group
+
+stages:
+
+# ─────────────────────────────────────────
+# STAGE 1: Validate (Run on all branches)
+# ─────────────────────────────────────────
+- stage: Validate
+  displayName: 'Validate Salesforce Metadata'
+  jobs:
+  - job: ValidateJob
+    displayName: 'Validate Deployment'
+    steps:
+
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '18.x'
+      displayName: 'Install Node.js'
+
+    - script: |
+        npm install --global @salesforce/cli
+        sf version
+      displayName: 'Install Salesforce CLI'
+
+    - script: |
+        echo "$(SERVER_KEY_BASE64)" | base64 --decode > $(Agent.TempDirectory)/server.key
+      displayName: 'Decode Private Key'
+
+    - script: |
+        sf org login jwt \
+          --client-id "$(SF_CONSUMER_KEY)" \
+          --jwt-key-file "$(Agent.TempDirectory)/server.key" \
+          --username "$(SF_USERNAME)" \
+          --instance-url "$(SF_INSTANCE_URL)" \
+          --alias DevOrg \
+          --set-default
+      displayName: 'Authenticate to Salesforce'
+
+    - script: |
+        sf project deploy validate \
+          --source-dir force-app \
+          --target-org DevOrg \
+          --test-level RunLocalTests
+      displayName: 'Validate Metadata (Dry Run)'
+
+# ─────────────────────────────────────────
+# STAGE 2: Deploy (Only on main branch)
+# ─────────────────────────────────────────
+- stage: Deploy
+  displayName: 'Deploy to Salesforce Dev Org'
+  dependsOn: Validate
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+  - deployment: DeployJob
+    displayName: 'Deploy Metadata'
+    environment: 'Salesforce-DevOrg'   # Creates approval gate in Azure DevOps
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - checkout: self
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '18.x'
+            displayName: 'Install Node.js'
+
+          - script: |
+              npm install --global @salesforce/cli
+            displayName: 'Install Salesforce CLI'
+
+          - script: |
+              echo "$(SERVER_KEY_BASE64)" | base64 --decode > $(Agent.TempDirectory)/server.key
+            displayName: 'Decode Private Key'
+
+          - script: |
+              sf org login jwt \
+                --client-id "$(SF_CONSUMER_KEY)" \
+                --jwt-key-file "$(Agent.TempDirectory)/server.key" \
+                --username "$(SF_USERNAME)" \
+                --instance-url "$(SF_INSTANCE_URL)" \
+                --alias DevOrg \
+                --set-default
+            displayName: 'Authenticate to Salesforce'
+
+          - script: |
+              sf project deploy start \
+                --source-dir force-app \
+                --target-org DevOrg \
+                --test-level RunLocalTests \
+                --wait 30
+            displayName: 'Deploy to Dev Org'
+
+          - script: |
+              rm -f $(Agent.TempDirectory)/server.key
+            displayName: 'Cleanup Key File'
+            condition: always()
