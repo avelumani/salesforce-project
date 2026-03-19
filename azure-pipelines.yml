@@ -50,7 +50,7 @@ stages:
 
     - script: |
         sf project deploy validate \
-          --source-dir force-app/main/default/flexipages \
+          --source-dir force-app \
           --target-org DevOrg \
           --api-version 62.0 \
           --test-level RunLocalTests \
