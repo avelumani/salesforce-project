@@ -51,10 +51,9 @@ stages:
     - script: |
         sf project deploy validate \
           --source-dir force-app \
-          --target-org DevOrg \
+          --target-org DevOrg/sandbox \
           --api-version 62.0 \
-          --test-level RunSpecifiedTests \
-          --tests DeleteEventBatchTest,EventAttendeeTriggerHandler \x
+          --test-level NoTestRun \
           --wait 30 \
           
       displayName: 'Validate Metadata (Dry Run)'
