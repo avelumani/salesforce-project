@@ -54,7 +54,7 @@ stages:
           --target-org DevOrg \
           --test-level RunLocalTests \
           --wait 30 \
-          --no-progress
+          
       displayName: 'Validate Metadata (Dry Run)'
 
     - script: |
@@ -113,7 +113,7 @@ stages:
                 --target-org DevOrg \
                 --test-level RunLocalTests \
                 --wait 60 \
-                --no-progress
+                
             displayName: 'Deploy to Dev Org'
 
           - script: |
