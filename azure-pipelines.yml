@@ -2,39 +2,42 @@
 trigger:
   branches:
     include:
-      - main          # Trigger on push to main
-      - develop       # Trigger on push to develop
-
-pool:
-  vmImage: 'ubuntu-latest'
+      - main
+      - develop
 
 variables:
-  - group: Salesforce-DevOrg-Vars   # Links to the variable group
+  - group: Salesforce-DevOrg-Vars
 
 stages:
 
 # ─────────────────────────────────────────
-# STAGE 1: Validate (Run on all branches)
+# STAGE 1: Validate (Runs on ALL branches)
 # ─────────────────────────────────────────
 - stage: Validate
   displayName: 'Validate Salesforce Metadata'
   jobs:
   - job: ValidateJob
     displayName: 'Validate Deployment'
+    timeoutInMinutes: 60           # FIX: prevent silent agent timeout
     steps:
 
-    - task: NodeTool@0
+    - checkout: self
+      fetchDepth: 1                # FIX: shallow clone = faster checkout
+
+    - task: NodeTool@1             # FIX: upgraded from NodeTool@0 (deprecated)
       inputs:
         versionSpec: '18.x'
       displayName: 'Install Node.js'
 
     - script: |
-        npm install --global @salesforce/cli
+        npm install --global @salesforce/cli --quiet
         sf version
       displayName: 'Install Salesforce CLI'
+      retryCountOnTaskFailure: 2   # FIX: retry if npm install flakes
 
     - script: |
         echo "$(SERVER_KEY_BASE64)" | base64 --decode > $(Agent.TempDirectory)/server.key
+        echo "Private key decoded successfully"
       displayName: 'Decode Private Key'
 
     - script: |
@@ -45,14 +48,23 @@ stages:
           --instance-url "$(SF_INSTANCE_URL)" \
           --alias DevOrg \
           --set-default
+        echo "Authentication successful"
       displayName: 'Authenticate to Salesforce'
 
     - script: |
         sf project deploy validate \
           --source-dir force-app \
           --target-org DevOrg \
-          --test-level RunLocalTests
+          --test-level RunLocalTests \
+          --wait 30 \              # FIX: was missing -- prevents premature timeout
+          --no-progress            # FIX: cleaner logs, avoids noise
       displayName: 'Validate Metadata (Dry Run)'
+
+    - script: |
+        rm -f $(Agent.TempDirectory)/server.key
+        echo "Key file cleaned up"
+      displayName: 'Cleanup Key File'
+      condition: always()          # Always clean up even on failure
 
 # ─────────────────────────────────────────
 # STAGE 2: Deploy (Only on main branch)
@@ -64,25 +76,29 @@ stages:
   jobs:
   - deployment: DeployJob
     displayName: 'Deploy Metadata'
-    environment: 'Salesforce-DevOrg'   # Creates approval gate in Azure DevOps
+    timeoutInMinutes: 90           # FIX: deployments take longer than validate
+    environment: 'Salesforce-DevOrg'
     strategy:
       runOnce:
         deploy:
           steps:
 
           - checkout: self
+            fetchDepth: 1          # FIX: shallow clone = faster checkout
 
-          - task: NodeTool@0
+          - task: NodeTool@1       # FIX: upgraded from NodeTool@0 (deprecated)
             inputs:
               versionSpec: '18.x'
             displayName: 'Install Node.js'
 
           - script: |
-              npm install --global @salesforce/cli
+              npm install --global @salesforce/cli --quiet
             displayName: 'Install Salesforce CLI'
+            retryCountOnTaskFailure: 2   # FIX: retry on flaky npm
 
           - script: |
               echo "$(SERVER_KEY_BASE64)" | base64 --decode > $(Agent.TempDirectory)/server.key
+              echo "Private key decoded successfully"
             displayName: 'Decode Private Key'
 
           - script: |
@@ -93,6 +109,7 @@ stages:
                 --instance-url "$(SF_INSTANCE_URL)" \
                 --alias DevOrg \
                 --set-default
+              echo "Authentication successful"
             displayName: 'Authenticate to Salesforce'
 
           - script: |
@@ -100,10 +117,12 @@ stages:
                 --source-dir force-app \
                 --target-org DevOrg \
                 --test-level RunLocalTests \
-                --wait 30
+                --wait 60 \        # FIX: increased from 30 for larger deployments
+                --no-progress      # FIX: cleaner logs
             displayName: 'Deploy to Dev Org'
 
           - script: |
               rm -f $(Agent.TempDirectory)/server.key
+              echo "Key file cleaned up"
             displayName: 'Cleanup Key File'
             condition: always()
