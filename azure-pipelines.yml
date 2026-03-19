@@ -18,22 +18,19 @@ stages:
   jobs:
   - job: ValidateJob
     displayName: 'Validate Deployment'
-    timeoutInMinutes: 60           # FIX: prevent silent agent timeout
+    timeoutInMinutes: 60
     steps:
 
     - checkout: self
-      fetchDepth: 1                # FIX: shallow clone = faster checkout
-
-    - task: NodeTool@1             # FIX: upgraded from NodeTool@0 (deprecated)
-      inputs:
-        versionSpec: '18.x'
-      displayName: 'Install Node.js'
+      fetchDepth: 1
 
     - script: |
-        npm install --global @salesforce/cli --quiet
+        # Install SF CLI via official standalone installer (no Node.js dependency)
+        wget -q https://developer.salesforce.com/media/salesforce-cli/sf/channels/stable/sf-linux-x64.tar.xz
+        sudo tar -xJf sf-linux-x64.tar.xz -C /usr/local/lib
+        sudo ln -sf /usr/local/lib/sf/bin/sf /usr/local/bin/sf
         sf version
       displayName: 'Install Salesforce CLI'
-      retryCountOnTaskFailure: 2   # FIX: retry if npm install flakes
 
     - script: |
         echo "$(SERVER_KEY_BASE64)" | base64 --decode > $(Agent.TempDirectory)/server.key
@@ -56,15 +53,15 @@ stages:
           --source-dir force-app \
           --target-org DevOrg \
           --test-level RunLocalTests \
-          --wait 30 \              # FIX: was missing -- prevents premature timeout
-          --no-progress            # FIX: cleaner logs, avoids noise
+          --wait 30 \
+          --no-progress
       displayName: 'Validate Metadata (Dry Run)'
 
     - script: |
         rm -f $(Agent.TempDirectory)/server.key
         echo "Key file cleaned up"
       displayName: 'Cleanup Key File'
-      condition: always()          # Always clean up even on failure
+      condition: always()
 
 # ─────────────────────────────────────────
 # STAGE 2: Deploy (Only on main branch)
@@ -76,7 +73,7 @@ stages:
   jobs:
   - deployment: DeployJob
     displayName: 'Deploy Metadata'
-    timeoutInMinutes: 90           # FIX: deployments take longer than validate
+    timeoutInMinutes: 90
     environment: 'Salesforce-DevOrg'
     strategy:
       runOnce:
@@ -84,17 +81,15 @@ stages:
           steps:
 
           - checkout: self
-            fetchDepth: 1          # FIX: shallow clone = faster checkout
-
-          - task: NodeTool@1       # FIX: upgraded from NodeTool@0 (deprecated)
-            inputs:
-              versionSpec: '18.x'
-            displayName: 'Install Node.js'
+            fetchDepth: 1
 
           - script: |
-              npm install --global @salesforce/cli --quiet
+              # Install SF CLI via official standalone installer (no Node.js dependency)
+              wget -q https://developer.salesforce.com/media/salesforce-cli/sf/channels/stable/sf-linux-x64.tar.xz
+              sudo tar -xJf sf-linux-x64.tar.xz -C /usr/local/lib
+              sudo ln -sf /usr/local/lib/sf/bin/sf /usr/local/bin/sf
+              sf version
             displayName: 'Install Salesforce CLI'
-            retryCountOnTaskFailure: 2   # FIX: retry on flaky npm
 
           - script: |
               echo "$(SERVER_KEY_BASE64)" | base64 --decode > $(Agent.TempDirectory)/server.key
@@ -117,8 +112,8 @@ stages:
                 --source-dir force-app \
                 --target-org DevOrg \
                 --test-level RunLocalTests \
-                --wait 60 \        # FIX: increased from 30 for larger deployments
-                --no-progress      # FIX: cleaner logs
+                --wait 60 \
+                --no-progress
             displayName: 'Deploy to Dev Org'
 
           - script: |
