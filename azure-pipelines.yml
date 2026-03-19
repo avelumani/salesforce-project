@@ -53,7 +53,8 @@ stages:
           --source-dir force-app \
           --target-org DevOrg \
           --api-version 62.0 \
-          --test-level NoTestRun \
+          --test-level RunSpecifiedTests \
+          --tests DeleteEventBatchTest,EventAttendeeTriggerHandler \x
           --wait 30 \
           
       displayName: 'Validate Metadata (Dry Run)'
