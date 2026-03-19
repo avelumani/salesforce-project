@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
 <apiVersion>62.0</apiVersion>
+ <masterLabel>Attendee Record Page</masterLabel>
     <flexiPageRegions>
         <componentInstances>
             <componentInstanceProperties>
@@ -116,7 +117,6 @@
         <name>sidebar</name>
         <type>Region</type>
     </flexiPageRegions>
-    <masterLabel>Attendee Record Page</masterLabel>
     <parentFlexiPage>flexipage__default_rec_L</parentFlexiPage>
     <sobjectType>Attendee__c</sobjectType>
     <template>
