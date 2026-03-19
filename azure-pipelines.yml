@@ -52,6 +52,7 @@ stages:
         sf project deploy validate \
           --source-dir force-app/main/default/flexipages \
           --target-org DevOrg \
+          --api-version 62.0 \
           --test-level RunLocalTests \
           --wait 30 \
           
