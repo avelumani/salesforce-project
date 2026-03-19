@@ -1,2 +1,0 @@
-# Exclude FlexiPages - already exist in org, XML format incompatible with deployment
-**/flexipages/**

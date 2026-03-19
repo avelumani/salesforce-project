@@ -5,6 +5,7 @@
       "default": true
     }
   ],
-  "sourceApiVersion": "62.0",
-  "namespace": ""
+  "name": "simple-project",
+  "namespace": "",
+  "sourceApiVersion": "62.0"
 }
