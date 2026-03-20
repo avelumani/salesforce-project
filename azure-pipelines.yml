@@ -180,9 +180,14 @@ stages:
       displayName: 'Install Node dependencies (npm install)'
 
     - script: |
+        npm install -g lightning-flow-scanner
+        echo "lightning-flow-scanner installed: $(lightning-flow-scanner --version 2>/dev/null || echo 'via npx')"
+      displayName: 'Install lightning-flow-scanner'
+
+    - script: |
         FLOW_DIR="force-app/main/default/flows"
         if [ -d "$FLOW_DIR" ] && [ "$(ls -A $FLOW_DIR 2>/dev/null)" ]; then
-          npx @salesforce/flow-scanner scan \
+          lightning-flow-scanner scan \
             --directory "$FLOW_DIR" \
             --config    policies/flow-scanner/flow-scanner.json \
             --format    junit \
