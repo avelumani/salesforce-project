@@ -1,0 +1,22 @@
+# .retireignore
+#
+# Suppress known false positives or accepted-risk findings.
+# Format (one rule per line):
+#
+#   [component]           — suppress all findings for this package
+#   [component] [version] — suppress a specific version
+#   [CVE-ID]              — suppress a specific CVE across all packages
+#
+# Each suppression MUST be reviewed and re-evaluated each quarter.
+# Add a comment above every entry explaining why it is suppressed.
+#
+# Example:
+#
+# lodash 4.17.20
+# CVE-2021-23337: accepted risk — no user input reaches the merge path in this project
+#
+# ─────────────────────────────────────────────────────────────────
+# Add your suppressions below this line.
+# Start empty — let RetireJS surface all findings on the first run,
+# then suppress only those that are genuinely not applicable.
+# ─────────────────────────────────────────────────────────────────

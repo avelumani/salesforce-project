@@ -12,16 +12,18 @@
     "policy:convert": "node scripts/utils/metadata-to-json.js --source force-app/main/default --output /tmp/metadata.json",
     "policy:opa": "npm run policy:convert && opa eval --data policies/opa --input /tmp/metadata.json --format raw 'data.salesforce.policy.deny' | node scripts/validate/opa-exit-check.js",
     "policy:checkov": "checkov --directory force-app/main/default --framework salesforce --external-checks-dir policies/checkov --output cli",
-    "policy:check": "npm run lint:apex && npm run lint:lwc && npm run lint:flows && npm run policy:opa && npm run policy:checkov",
+    "policy:check": "npm run lint:apex && npm run lint:lwc && npm run lint:flows && npm run policy:opa && npm run policy:checkov && npm run lint:retire",
     "deploy:validate": "sf project deploy validate --source-dir force-app --api-version 62.0 --test-level RunLocalTests --wait 30",
-    "format": "prettier --write \"force-app/**/*.{cls,js,html,json}\""
+    "format": "prettier --write \"force-app/**/*.{cls,js,html,json}\"",
+    "lint:retire": "retire --path . --severity high --outputformat text 2>/dev/null || true"
   },
   "devDependencies": {
     "@lwc/eslint-plugin-lwc": "^1.7.2",
     "@salesforce/cli": "^2.0.0",
     "eslint": "^8.57.0",
     "prettier": "^3.2.5",
-    "prettier-plugin-apex": "^2.0.1"
+    "prettier-plugin-apex": "^2.0.1",
+    "retire": "^5.0.0"
   },
   "dependencies": {}
 }

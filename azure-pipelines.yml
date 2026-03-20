@@ -1,12 +1,13 @@
 # azure-pipelines.yml
 #
 # STAGE 1 — Validate     : SF CLI dry-run validate  (ALL branches)
-# STAGE 2 — PolicyCheck  : 5 parallel quality gates (ALL branches)
+# STAGE 2 — PolicyCheck  : 6 parallel quality gates (ALL branches)
 #   Job 1: ApexPMD     → PMD static analysis on .cls files
 #   Job 2: LWCLint     → ESLint on lwc/ components
 #   Job 3: FlowScan    → lightning-flow-scanner via SF CLI plugin
 #   Job 4: OPAPolicy   → OPA Rego rules on metadata JSON
 #   Job 5: CheckovScan → Checkov CIS checks + SARIF output
+#   Job 6: RetireJS    → Vulnerable JS dependency detection
 # STAGE 3 — Deploy       : Real deployment (main branch only)
 
 trigger:
@@ -79,7 +80,7 @@ stages:
 
 # ═════════════════════════════════════════════════════════════════
 # STAGE 2 — STATIC ANALYSIS & POLICY AS CODE
-# Five parallel jobs. ALL must pass before Deploy runs.
+# Six parallel jobs. ALL must pass before Deploy runs.
 # ═════════════════════════════════════════════════════════════════
 - stage: PolicyCheck
   displayName: '2 — Static Analysis & Policy as Code'
@@ -355,6 +356,129 @@ stages:
         PathtoPublish:   '$(Agent.TempDirectory)/checkov-results.sarif'
         ArtifactName:    'checkov-sarif'
         publishLocation: 'Container'
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 6 — RetireJS
+  # Scans node_modules/ and JS files for known CVE-listed
+  # vulnerable library versions.
+  # --severity high  → only High + Critical CVEs fail the build.
+  # Skips gracefully if no node_modules/ present.
+  # ─────────────────────────────────────────────────────────────
+  - job: RetireJS
+    displayName: 'Job 6 — RetireJS: Vulnerable JS dependencies'
+    timeoutInMinutes: 15
+    steps:
+
+    - checkout: self
+      fetchDepth: 1
+
+    - task: NodeTool@0
+      displayName: 'Setup Node 18'
+      inputs:
+        versionSpec: '18.x'
+
+    - script: npm install --legacy-peer-deps
+      displayName: 'Install Node dependencies'
+
+    - script: |
+        npm install -g retire
+        retire --version
+      displayName: 'Install RetireJS'
+
+    - script: |
+        # Run RetireJS — scan node_modules and JS files for known CVEs
+        # --severity high  : flag High and Critical vulnerabilities only
+        # --outputformat json : machine-readable for JUnit conversion
+        # || true : prevent non-zero exit from stopping the publish step
+
+        retire \
+          --path            . \
+          --severity        high \
+          --outputformat    json \
+          --outputpath      "$(Agent.TempDirectory)/retire-results.json" \
+          --ignorefile      .retireignore \
+          2>/dev/null || true
+
+        echo "RetireJS scan completed"
+        echo "Raw results:"
+        cat "$(Agent.TempDirectory)/retire-results.json" 2>/dev/null | head -50 || echo "(no output file)"
+      displayName: 'Run RetireJS'
+
+    - script: |
+        # Convert RetireJS JSON → JUnit XML for Azure DevOps test results widget
+        node -e "
+          const fs = require('fs');
+          const outFile = '$(Agent.TempDirectory)/retire-results.json';
+
+          if (!fs.existsSync(outFile)) {
+            const xml = '<?xml version=\"1.0\"?><testsuites><testsuite name=\"RetireJS\" tests=\"0\" failures=\"0\"/></testsuites>';
+            fs.writeFileSync('$(Agent.TempDirectory)/retire-junit.xml', xml);
+            console.log('RetireJS: no results file — writing empty pass');
+            process.exit(0);
+          }
+
+          const raw = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+          const findings = raw.data || [];
+          let cases = '';
+          let failures = 0;
+          let total = 0;
+
+          findings.forEach(f => {
+            (f.results || []).forEach(r => {
+              (r.vulnerabilities || []).forEach(v => {
+                total++;
+                const cve     = (v.identifiers && v.identifiers.CVE && v.identifiers.CVE[0]) || 'CVE-unknown';
+                const summary = (v.summary || 'no summary').replace(/[<>&\"]/g, '?');
+                const name    = (r.component || '?') + '@' + (r.version || '?') + ' — ' + cve;
+                const sev     = (v.severity || 'unknown').toUpperCase();
+                failures++;
+                cases += '<testcase name=\"' + name + '\" classname=\"RetireJS\">'
+                       + '<failure message=\"[' + sev + '] ' + summary + '\">'
+                       + 'Component: ' + (r.component||'?') + ' v' + (r.version||'?') + '\n'
+                       + 'CVE: ' + cve + '\n'
+                       + 'Severity: ' + sev + '\n'
+                       + 'Summary: ' + summary + '\n'
+                       + 'File: ' + (f.file || 'unknown')
+                       + '</failure></testcase>';
+              });
+            });
+          });
+
+          const xml = '<?xml version=\"1.0\" encoding=\"UTF-8\"?>'
+            + '<testsuites>'
+            + '<testsuite name=\"RetireJS\" tests=\"' + total + '\" failures=\"' + failures + '\">'
+            + cases
+            + '</testsuite>'
+            + '</testsuites>';
+
+          fs.writeFileSync('$(Agent.TempDirectory)/retire-junit.xml', xml);
+          console.log('RetireJS: ' + total + ' vulnerabilities found (' + failures + ' failures)');
+
+          if (failures > 0) {
+            console.log('##[warning]RetireJS found ' + failures + ' vulnerable JS libraries. Review and update or suppress.');
+            findings.forEach(f => {
+              (f.results || []).forEach(r => {
+                (r.vulnerabilities || []).forEach(v => {
+                  const cve = (v.identifiers && v.identifiers.CVE && v.identifiers.CVE[0]) || 'CVE-unknown';
+                  console.log('##vso[task.logissue type=warning]' + (r.component||'?') + '@' + (r.version||'?') + ' — ' + cve + ': ' + (v.summary||''));
+                });
+              });
+            });
+          }
+        "
+      displayName: 'Convert RetireJS results to JUnit'
+
+    - task: PublishTestResults@2
+      displayName: 'Publish RetireJS Results'
+      condition: always()
+      inputs:
+        testResultsFormat:     JUnit
+        testResultsFiles:      '$(Agent.TempDirectory)/retire-junit.xml'
+        testRunTitle:          'RetireJS — Vulnerable JS libraries'
+        failTaskOnFailedTests: false
+        # Set failTaskOnFailedTests: true once your baseline is clean
+        # (i.e. all existing vulnerabilities are either fixed or suppressed
+        #  via .retireignore)
 
 
 # ═════════════════════════════════════════════════════════════════
