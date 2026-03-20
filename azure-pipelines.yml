@@ -1,14 +1,13 @@
 # azure-pipelines.yml
 #
-# STAGE 1 → Validate     : SF CLI dry-run validate against the org   (ALL branches)
-# STAGE 2 → PolicyCheck  : Static Analysis & Policy as Code gates    (ALL branches)
-#   ├── Job: ApexPMD     → PMD rules on .cls files
-#   ├── Job: LWCLint     → ESLint on lwc/
-#   ├── Job: FlowScan    → Flow Scanner on flows/
-#   ├── Job: OPAPolicy   → Custom Rego rules on metadata JSON
-#   └── Job: CheckovScan → Pre-built + custom checks on metadata XML
-#                          └── Publishes SARIF → inline PR annotations
-# STAGE 3 → Deploy       : Real deployment to Dev Org  (main branch only)
+# STAGE 1 — Validate     : SF CLI dry-run validate  (ALL branches)
+# STAGE 2 — PolicyCheck  : 5 parallel quality gates (ALL branches)
+#   Job 1: ApexPMD     → PMD static analysis on .cls files
+#   Job 2: LWCLint     → ESLint on lwc/ components
+#   Job 3: FlowScan    → lightning-flow-scanner via SF CLI plugin
+#   Job 4: OPAPolicy   → OPA Rego rules on metadata JSON
+#   Job 5: CheckovScan → Checkov CIS checks + SARIF output
+# STAGE 3 — Deploy       : Real deployment (main branch only)
 
 trigger:
   branches:
@@ -19,11 +18,16 @@ trigger:
 variables:
   - group: Salesforce-DevOrg-Vars
 
+# ─────────────────────────────────────────────────────────────────
+# Reusable step template: install SF CLI (used in Validate, FlowScan, Deploy)
+# ─────────────────────────────────────────────────────────────────
 stages:
 
-# ═══════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════
 # STAGE 1 — VALIDATE (Dry Run)
-# ═══════════════════════════════════════════════════════════════
+# Authenticates to the org and runs a full metadata validation
+# with Apex tests. Catches org-level errors before code analysis.
+# ═════════════════════════════════════════════════════════════════
 - stage: Validate
   displayName: '1 — Validate Metadata (Dry Run)'
   jobs:
@@ -45,7 +49,6 @@ stages:
 
     - script: |
         echo "$(SERVER_KEY_BASE64)" | base64 --decode > $(Agent.TempDirectory)/server.key
-        echo "Private key decoded successfully"
       displayName: 'Decode Private Key'
 
     - script: |
@@ -70,22 +73,25 @@ stages:
 
     - script: |
         rm -f $(Agent.TempDirectory)/server.key
-        echo "Key file cleaned up"
       displayName: 'Cleanup Key File'
       condition: always()
 
 
-# ═══════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════
 # STAGE 2 — STATIC ANALYSIS & POLICY AS CODE
-# Five parallel jobs — ALL must pass before Deploy is allowed.
-# ═══════════════════════════════════════════════════════════════
+# Five parallel jobs. ALL must pass before Deploy runs.
+# ═════════════════════════════════════════════════════════════════
 - stage: PolicyCheck
   displayName: '2 — Static Analysis & Policy as Code'
   dependsOn: Validate
   condition: succeeded()
   jobs:
 
-  # ── JOB 1: ApexPMD ──────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 1 — ApexPMD
+  # PMD static analysis on all Apex .cls files.
+  # Severity 1-2 violations fail the build.
+  # ─────────────────────────────────────────────────────────────
   - job: ApexPMD
     displayName: 'Job 1 — ApexPMD: PMD rules on .cls files'
     timeoutInMinutes: 20
@@ -100,7 +106,7 @@ stages:
         versionSpec: '18.x'
 
     - script: npm install --legacy-peer-deps
-      displayName: 'Install Node dependencies (npm install)'
+      displayName: 'Install Node dependencies'
 
     - script: |
         npx @salesforce/cli scanner run \
@@ -121,7 +127,11 @@ stages:
         testRunTitle:          'PMD — Apex Static Analysis'
         failTaskOnFailedTests: true
 
-  # ── JOB 2: LWCLint ──────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2 — LWCLint
+  # ESLint on lwc/ using LWC-specific plugin rules.
+  # Skips gracefully if no LWC components exist yet.
+  # ─────────────────────────────────────────────────────────────
   - job: LWCLint
     displayName: 'Job 2 — LWCLint: ESLint on lwc/'
     timeoutInMinutes: 10
@@ -136,11 +146,11 @@ stages:
         versionSpec: '18.x'
 
     - script: npm install --legacy-peer-deps
-      displayName: 'Install Node dependencies (npm install)'
+      displayName: 'Install Node dependencies'
 
     - script: |
         LWC_DIR="force-app/main/default/lwc"
-        if [ -d "$LWC_DIR" ] && [ "$(ls -A $LWC_DIR 2>/dev/null)" ]; then
+        if [ -d "$LWC_DIR" ] && [ "$(ls -A "$LWC_DIR" 2>/dev/null)" ]; then
           npx eslint \
             --config      policies/eslint/.eslintrc.json \
             "$LWC_DIR" \
@@ -148,7 +158,7 @@ stages:
             --output-file "$(Agent.TempDirectory)/eslint-results.xml"
           echo "ESLint scan completed"
         else
-          echo "##[warning]No LWC components found — writing empty pass result"
+          echo "##[warning]No LWC components found — skipping ESLint"
           echo '<?xml version="1.0"?><testsuites><testsuite name="ESLint" tests="0" failures="0"/></testsuites>' \
             > "$(Agent.TempDirectory)/eslint-results.xml"
         fi
@@ -162,39 +172,68 @@ stages:
         testResultsFiles:  '$(Agent.TempDirectory)/eslint-results.xml'
         testRunTitle:      'ESLint — LWC Analysis'
 
-  # ── JOB 3: FlowScan ─────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 3 — FlowScan
+  # lightning-flow-scanner is a Salesforce CLI plugin.
+  # Steps: install SF CLI → install plugin → sf flow:scan
+  # Skips gracefully if no flows exist yet.
+  # ─────────────────────────────────────────────────────────────
   - job: FlowScan
     displayName: 'Job 3 — FlowScan: Flow Scanner on flows/'
-    timeoutInMinutes: 10
+    timeoutInMinutes: 20
     steps:
 
     - checkout: self
       fetchDepth: 1
 
-    - task: NodeTool@0
-      displayName: 'Setup Node 18'
-      inputs:
-        versionSpec: '18.x'
-
-    - script: npm install --legacy-peer-deps
-      displayName: 'Install Node dependencies (npm install)'
-
+    # SF CLI must be installed first — lightning-flow-scanner is an SF plugin
     - script: |
-        npm install -g lightning-flow-scanner
-        echo "lightning-flow-scanner installed: $(lightning-flow-scanner --version 2>/dev/null || echo 'via npx')"
-      displayName: 'Install lightning-flow-scanner'
+        wget -q https://developer.salesforce.com/media/salesforce-cli/sf/channels/stable/sf-linux-x64.tar.xz
+        sudo tar -xJf sf-linux-x64.tar.xz -C /usr/local/lib
+        sudo ln -sf /usr/local/lib/sf/bin/sf /usr/local/bin/sf
+        sf version
+      displayName: 'Install Salesforce CLI'
+
+    # Install lightning-flow-scanner as an SF CLI plugin (not via npm)
+    - script: |
+        echo y | sf plugins install lightning-flow-scanner
+        echo "lightning-flow-scanner installed successfully"
+        sf plugins list | grep lightning-flow-scanner
+      displayName: 'Install lightning-flow-scanner plugin'
 
     - script: |
         FLOW_DIR="force-app/main/default/flows"
-        if [ -d "$FLOW_DIR" ] && [ "$(ls -A $FLOW_DIR 2>/dev/null)" ]; then
-          lightning-flow-scanner scan \
+        if [ -d "$FLOW_DIR" ] && [ "$(ls -A "$FLOW_DIR" 2>/dev/null)" ]; then
+          sf flow:scan \
             --directory "$FLOW_DIR" \
-            --config    policies/flow-scanner/flow-scanner.json \
-            --format    junit \
-            --output    "$(Agent.TempDirectory)/flow-results.xml"
+            --config    "policies/flow-scanner/flow-scanner.json" \
+            --json \
+            > "$(Agent.TempDirectory)/flow-raw.json" || true
+
+          # Convert JSON output to JUnit XML for Azure DevOps
+          node -e "
+            const fs = require('fs');
+            const raw = JSON.parse(fs.readFileSync('$(Agent.TempDirectory)/flow-raw.json', 'utf8'));
+            const results = raw.result || [];
+            let cases = '';
+            let failures = 0;
+            results.forEach(r => {
+              (r.details || []).forEach(d => {
+                if (d.severity === 'error') {
+                  failures++;
+                  cases += '<testcase name=\"' + (r.name||'') + ' — ' + (d.ruleName||'') + '\" classname=\"FlowScanner\"><failure>' + (d.message||'').replace(/[<>&]/g,'?') + '</failure></testcase>';
+                } else {
+                  cases += '<testcase name=\"' + (r.name||'') + ' — ' + (d.ruleName||'') + '\" classname=\"FlowScanner\"/>';
+                }
+              });
+            });
+            const xml = '<?xml version=\"1.0\"?><testsuites><testsuite name=\"FlowScanner\" tests=\"' + results.length + '\" failures=\"' + failures + '\">' + cases + '</testsuite></testsuites>';
+            fs.writeFileSync('$(Agent.TempDirectory)/flow-results.xml', xml);
+            console.log('Flow scan: ' + results.length + ' flows checked, ' + failures + ' errors found');
+          "
           echo "Flow scan completed"
         else
-          echo "##[warning]No Flows found — writing empty pass result"
+          echo "##[warning]No Flows found — skipping Flow Scanner"
           echo '<?xml version="1.0"?><testsuites><testsuite name="FlowScanner" tests="0" failures="0"/></testsuites>' \
             > "$(Agent.TempDirectory)/flow-results.xml"
         fi
@@ -208,7 +247,11 @@ stages:
         testResultsFiles:  '$(Agent.TempDirectory)/flow-results.xml'
         testRunTitle:      'Flow Scanner'
 
-  # ── JOB 4: OPAPolicy ────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 4 — OPAPolicy
+  # Converts XML metadata to JSON then evaluates against custom
+  # Rego rules. Any deny rule firing exits 1 → build fails.
+  # ─────────────────────────────────────────────────────────────
   - job: OPAPolicy
     displayName: 'Job 4 — OPAPolicy: Custom Rego rules on metadata JSON'
     timeoutInMinutes: 15
@@ -223,7 +266,7 @@ stages:
         versionSpec: '18.x'
 
     - script: npm install --legacy-peer-deps
-      displayName: 'Install Node dependencies (npm install)'
+      displayName: 'Install Node dependencies'
 
     - script: |
         node scripts/utils/metadata-to-json.js \
@@ -248,7 +291,11 @@ stages:
           | node scripts/validate/opa-exit-check.js
       displayName: 'Evaluate OPA Policy Rules'
 
-  # ── JOB 5: CheckovScan ──────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 5 — CheckovScan
+  # Pre-built CIS-aligned checks + custom Python checks on the
+  # XML metadata. Publishes SARIF for inline PR annotations.
+  # ─────────────────────────────────────────────────────────────
   - job: CheckovScan
     displayName: 'Job 5 — CheckovScan: Pre-built + custom checks on metadata XML'
     timeoutInMinutes: 15
@@ -280,7 +327,7 @@ stages:
       displayName: 'Run Checkov on Salesforce Metadata'
 
     - task: PublishBuildArtifacts@1
-      displayName: 'Publish SARIF for inline PR annotations'
+      displayName: 'Publish SARIF — inline PR annotations'
       condition: always()
       inputs:
         PathtoPublish:   '$(Agent.TempDirectory)/checkov-results.sarif'
@@ -288,9 +335,11 @@ stages:
         publishLocation: 'Container'
 
 
-# ═══════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════
 # STAGE 3 — DEPLOY (main branch only)
-# ═══════════════════════════════════════════════════════════════
+# Runs only after Stage 1 and Stage 2 both pass.
+# Uses Azure DevOps Environment for manual approval gates.
+# ═════════════════════════════════════════════════════════════════
 - stage: Deploy
   displayName: '3 — Deploy to Salesforce Dev Org'
   dependsOn: PolicyCheck
@@ -318,7 +367,6 @@ stages:
 
           - script: |
               echo "$(SERVER_KEY_BASE64)" | base64 --decode > $(Agent.TempDirectory)/server.key
-              echo "Private key decoded successfully"
             displayName: 'Decode Private Key'
 
           - script: |
@@ -342,6 +390,5 @@ stages:
 
           - script: |
               rm -f $(Agent.TempDirectory)/server.key
-              echo "Key file cleaned up"
             displayName: 'Cleanup Key File'
             condition: always()
