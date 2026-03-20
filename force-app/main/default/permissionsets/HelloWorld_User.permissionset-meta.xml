@@ -35,19 +35,18 @@
     <!-- User permissions — minimum set, dangerous ones explicitly blocked -->
     <userPermissions>
         <enabled>false</enabled>
-        <n>ModifyAllData</n>
+        <name>ModifyAllData</name>
     </userPermissions>
     <userPermissions>
         <enabled>false</enabled>
-        <n>ViewAllData</n>
+        <name>ViewAllData</name>
     </userPermissions>
     <userPermissions>
         <enabled>false</enabled>
-        <n>ManageUsers</n>
+        <name>ManageUsers</name>
     </userPermissions>
     <userPermissions>
         <enabled>true</enabled>
-        <n>RunReports</n>
+        <name>RunReports</name>
     </userPermissions>
-
 </PermissionSet>
