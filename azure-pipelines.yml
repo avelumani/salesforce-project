@@ -198,7 +198,7 @@ stages:
     - script: |
         echo y | sf plugins install lightning-flow-scanner
         echo "lightning-flow-scanner installed successfully"
-        sf plugins list | grep lightning-flow-scanner
+        sf plugins | grep lightning-flow-scanner
       displayName: 'Install lightning-flow-scanner plugin'
 
     - script: |
