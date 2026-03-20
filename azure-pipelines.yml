@@ -99,8 +99,8 @@ stages:
       inputs:
         versionSpec: '18.x'
 
-    - script: npm install
-      displayName: 'Install Node dependencies'
+    - script: npm install --legacy-peer-deps
+      displayName: 'Install Node dependencies (npm install)'
 
     - script: |
         npx @salesforce/cli scanner run \
@@ -135,8 +135,8 @@ stages:
       inputs:
         versionSpec: '18.x'
 
-    - script: npm install
-      displayName: 'Install Node dependencies'
+    - script: npm install --legacy-peer-deps
+      displayName: 'Install Node dependencies (npm install)'
 
     - script: |
         LWC_DIR="force-app/main/default/lwc"
@@ -176,13 +176,13 @@ stages:
       inputs:
         versionSpec: '18.x'
 
-    - script: npm install
-      displayName: 'Install Node dependencies'
+    - script: npm install --legacy-peer-deps
+      displayName: 'Install Node dependencies (npm install)'
 
     - script: |
         FLOW_DIR="force-app/main/default/flows"
         if [ -d "$FLOW_DIR" ] && [ "$(ls -A $FLOW_DIR 2>/dev/null)" ]; then
-          npx flow-scanner scan \
+          npx @salesforce/flow-scanner scan \
             --directory "$FLOW_DIR" \
             --config    policies/flow-scanner/flow-scanner.json \
             --format    junit \
@@ -217,8 +217,8 @@ stages:
       inputs:
         versionSpec: '18.x'
 
-    - script: npm install
-      displayName: 'Install Node dependencies'
+    - script: npm install --legacy-peer-deps
+      displayName: 'Install Node dependencies (npm install)'
 
     - script: |
         node scripts/utils/metadata-to-json.js \
