@@ -1,0 +1,26 @@
+# Salesforce tooling
+.sfdx/
+.sf/
+.localdevserver/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Pipeline / test artifacts
+/tmp/
+coverage/
+test-results/
+*.sarif
+
+# Secrets — NEVER commit org credentials
+server.key
+server.key.base64
+auth.json
+*.env
+
+# IDE
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

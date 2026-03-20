@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  force-app/main/default/flows/UpdateGreetingDate.flow-meta.xml
+
+  Policy-compliant AutoLaunchedFlow — FlowScan Job 3 scans this file:
+    ✅ processType = AutoLaunchedFlow
+    ✅ Every recordUpdates element has a faultConnector  (COMP-003 / CKV2_SFO_004)
+    ✅ No hard-coded Salesforce IDs                      (Flow Scanner)
+    ✅ API version >= 58                                 (Flow Scanner)
+    ✅ Status = Active                                   (Flow Scanner no-inactive-flows)
+    ✅ PascalCase API name                               (Flow Scanner naming convention)
+    ✅ description present                               (OPA DEPLOY-005)
+-->
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>62.0</apiVersion>
+    <description>Updates the LastModifiedDate stamp on a Contact record when triggered by an Apex invocable action. Input: recordId (String). Output: errorMessage (String) if fault occurs.</description>
+    <interviewLabel>Update Greeting Date {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Update Greeting Date</label>
+    <processType>AutoLaunchedFlow</processType>
+    <status>Active</status>
+
+    <!-- Input variable — never hard-coded, always passed by caller -->
+    <variables>
+        <name>recordId</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>true</isInput>
+        <isOutput>false</isOutput>
+        <description>Id of the Contact to update. Passed in by the invoking Apex — never hard-coded.</description>
+    </variables>
+
+    <!-- Output variable — captures fault message for caller -->
+    <variables>
+        <name>errorMessage</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>true</isOutput>
+        <description>Populated when the record update fails. Surface this to the user via the calling component.</description>
+    </variables>
+
+    <start>
+        <locationX>176</locationX>
+        <locationY>48</locationY>
+        <connector>
+            <targetReference>UpdateContactDescription</targetReference>
+        </connector>
+    </start>
+
+    <!-- Record Update with fault path (required by COMP-003 / CKV2_SFO_004) -->
+    <recordUpdates>
+        <name>UpdateContactDescription</name>
+        <label>Update Contact Description</label>
+        <locationX>176</locationX>
+        <locationY>168</locationY>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>recordId</elementReference>
+            </value>
+        </filters>
+        <inputAssignments>
+            <field>Description</field>
+            <value>
+                <stringValue>Greeted via UpdateGreetingDate flow</stringValue>
+            </value>
+        </inputAssignments>
+        <object>Contact</object>
+        <!-- ✅ Fault connector present — satisfies COMP-003 & CKV2_SFO_004 -->
+        <faultConnector>
+            <targetReference>CaptureFaultMessage</targetReference>
+        </faultConnector>
+    </recordUpdates>
+
+    <!-- Fault handler — writes $Flow.FaultMessage to output variable -->
+    <assignments>
+        <name>CaptureFaultMessage</name>
+        <label>Capture Fault Message</label>
+        <locationX>396</locationX>
+        <locationY>168</locationY>
+        <assignmentItems>
+            <assignToReference>errorMessage</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>$Flow.FaultMessage</elementReference>
+            </value>
+        </assignmentItems>
+    </assignments>
+
+</Flow>

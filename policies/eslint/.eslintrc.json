@@ -1,0 +1,31 @@
+{
+  "//": "policies/eslint/.eslintrc.json — ESLint rules for Lightning Web Components",
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "plugins": [
+    "@lwc/eslint-plugin-lwc"
+  ],
+  "extends": [
+    "plugin:@lwc/lwc/recommended"
+  ],
+  "rules": {
+    "@lwc/lwc/no-api-reassignments":              "error",
+    "@lwc/lwc/no-deprecated":                     "error",
+    "@lwc/lwc/no-document-query":                 "error",
+    "@lwc/lwc/no-inner-html":                     "error",
+    "@lwc/lwc/no-leading-uppercase-api-name":     "error",
+    "@lwc/lwc/no-unexpected-wire-adapter-usages": "error",
+    "no-console":                                 "warn",
+    "no-unused-vars":                             "error",
+    "no-undef":                                   "error",
+    "eqeqeq":                                     ["error", "always"],
+    "no-eval":                                    "error"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    ".sfdx/",
+    ".sf/"
+  ]
+}

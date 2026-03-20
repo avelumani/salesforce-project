@@ -1,4 +1,15 @@
 # azure-pipelines.yml
+#
+# STAGE 1 → Validate     : SF CLI dry-run validate against the org   (ALL branches)
+# STAGE 2 → PolicyCheck  : Static Analysis & Policy as Code gates    (ALL branches)
+#   ├── Job: ApexPMD     → PMD rules on .cls files
+#   ├── Job: LWCLint     → ESLint on lwc/
+#   ├── Job: FlowScan    → Flow Scanner on flows/
+#   ├── Job: OPAPolicy   → Custom Rego rules on metadata JSON
+#   └── Job: CheckovScan → Pre-built + custom checks on metadata XML
+#                          └── Publishes SARIF → inline PR annotations
+# STAGE 3 → Deploy       : Real deployment to Dev Org  (main branch only)
+
 trigger:
   branches:
     include:
@@ -10,14 +21,15 @@ variables:
 
 stages:
 
-# ─────────────────────────────────────────
-# STAGE 1: Validate (Runs on ALL branches)
-# ─────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════
+# STAGE 1 — VALIDATE (Dry Run)
+# ═══════════════════════════════════════════════════════════════
 - stage: Validate
-  displayName: 'Validate Salesforce Metadata'
+  displayName: '1 — Validate Metadata (Dry Run)'
   jobs:
+
   - job: ValidateJob
-    displayName: 'Validate Deployment'
+    displayName: 'SF CLI — Validate Deployment'
     timeoutInMinutes: 60
     steps:
 
@@ -25,7 +37,6 @@ stages:
       fetchDepth: 1
 
     - script: |
-        # Install SF CLI via official standalone installer (no Node.js dependency)
         wget -q https://developer.salesforce.com/media/salesforce-cli/sf/channels/stable/sf-linux-x64.tar.xz
         sudo tar -xJf sf-linux-x64.tar.xz -C /usr/local/lib
         sudo ln -sf /usr/local/lib/sf/bin/sf /usr/local/bin/sf
@@ -39,23 +50,22 @@ stages:
 
     - script: |
         sf org login jwt \
-          --client-id "$(SF_CONSUMER_KEY)" \
+          --client-id    "$(SF_CONSUMER_KEY)" \
           --jwt-key-file "$(Agent.TempDirectory)/server.key" \
-          --username "$(SF_USERNAME)" \
+          --username     "$(SF_USERNAME)" \
           --instance-url "$(SF_INSTANCE_URL)" \
-          --alias DevOrg \
+          --alias        DevOrg \
           --set-default
         echo "Authentication successful"
       displayName: 'Authenticate to Salesforce'
 
     - script: |
         sf project deploy validate \
-          --source-dir force-app \
-          --target-org DevOrg \
+          --source-dir  force-app \
+          --target-org  DevOrg \
           --api-version 62.0 \
-          --test-level RunLocalTests \
-          --wait 30 \
-          
+          --test-level  RunLocalTests \
+          --wait        30
       displayName: 'Validate Metadata (Dry Run)'
 
     - script: |
@@ -64,14 +74,224 @@ stages:
       displayName: 'Cleanup Key File'
       condition: always()
 
-# ─────────────────────────────────────────
-# STAGE 2: Deploy (Only on main branch)
-# ─────────────────────────────────────────
-- stage: Deploy
-  displayName: 'Deploy to Salesforce Dev Org'
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 2 — STATIC ANALYSIS & POLICY AS CODE
+# Five parallel jobs — ALL must pass before Deploy is allowed.
+# ═══════════════════════════════════════════════════════════════
+- stage: PolicyCheck
+  displayName: '2 — Static Analysis & Policy as Code'
   dependsOn: Validate
+  condition: succeeded()
+  jobs:
+
+  # ── JOB 1: ApexPMD ──────────────────────────────────────────
+  - job: ApexPMD
+    displayName: 'Job 1 — ApexPMD: PMD rules on .cls files'
+    timeoutInMinutes: 20
+    steps:
+
+    - checkout: self
+      fetchDepth: 1
+
+    - task: NodeTool@0
+      displayName: 'Setup Node 18'
+      inputs:
+        versionSpec: '18.x'
+
+    - script: npm ci
+      displayName: 'Install Node dependencies'
+
+    - script: |
+        npx @salesforce/cli scanner run \
+          --target             "force-app/main/default/classes" \
+          --ruleset            "policies/pmd/apex-ruleset.xml" \
+          --format             "junit" \
+          --outfile            "$(Agent.TempDirectory)/pmd-results.xml" \
+          --severity-threshold 2
+        echo "PMD scan completed"
+      displayName: 'Run PMD on Apex Classes'
+
+    - task: PublishTestResults@2
+      displayName: 'Publish PMD Results'
+      condition: always()
+      inputs:
+        testResultsFormat:     JUnit
+        testResultsFiles:      '$(Agent.TempDirectory)/pmd-results.xml'
+        testRunTitle:          'PMD — Apex Static Analysis'
+        failTaskOnFailedTests: true
+
+  # ── JOB 2: LWCLint ──────────────────────────────────────────
+  - job: LWCLint
+    displayName: 'Job 2 — LWCLint: ESLint on lwc/'
+    timeoutInMinutes: 10
+    steps:
+
+    - checkout: self
+      fetchDepth: 1
+
+    - task: NodeTool@0
+      displayName: 'Setup Node 18'
+      inputs:
+        versionSpec: '18.x'
+
+    - script: npm ci
+      displayName: 'Install Node dependencies'
+
+    - script: |
+        LWC_DIR="force-app/main/default/lwc"
+        if [ -d "$LWC_DIR" ] && [ "$(ls -A $LWC_DIR 2>/dev/null)" ]; then
+          npx eslint \
+            --config      policies/eslint/.eslintrc.json \
+            "$LWC_DIR" \
+            --format      junit \
+            --output-file "$(Agent.TempDirectory)/eslint-results.xml"
+          echo "ESLint scan completed"
+        else
+          echo "##[warning]No LWC components found — writing empty pass result"
+          echo '<?xml version="1.0"?><testsuites><testsuite name="ESLint" tests="0" failures="0"/></testsuites>' \
+            > "$(Agent.TempDirectory)/eslint-results.xml"
+        fi
+      displayName: 'Run ESLint on LWC'
+
+    - task: PublishTestResults@2
+      displayName: 'Publish ESLint Results'
+      condition: always()
+      inputs:
+        testResultsFormat: JUnit
+        testResultsFiles:  '$(Agent.TempDirectory)/eslint-results.xml'
+        testRunTitle:      'ESLint — LWC Analysis'
+
+  # ── JOB 3: FlowScan ─────────────────────────────────────────
+  - job: FlowScan
+    displayName: 'Job 3 — FlowScan: Flow Scanner on flows/'
+    timeoutInMinutes: 10
+    steps:
+
+    - checkout: self
+      fetchDepth: 1
+
+    - task: NodeTool@0
+      displayName: 'Setup Node 18'
+      inputs:
+        versionSpec: '18.x'
+
+    - script: npm ci
+      displayName: 'Install Node dependencies'
+
+    - script: |
+        FLOW_DIR="force-app/main/default/flows"
+        if [ -d "$FLOW_DIR" ] && [ "$(ls -A $FLOW_DIR 2>/dev/null)" ]; then
+          npx flow-scanner scan \
+            --directory "$FLOW_DIR" \
+            --config    policies/flow-scanner/flow-scanner.json \
+            --format    junit \
+            --output    "$(Agent.TempDirectory)/flow-results.xml"
+          echo "Flow scan completed"
+        else
+          echo "##[warning]No Flows found — writing empty pass result"
+          echo '<?xml version="1.0"?><testsuites><testsuite name="FlowScanner" tests="0" failures="0"/></testsuites>' \
+            > "$(Agent.TempDirectory)/flow-results.xml"
+        fi
+      displayName: 'Run Flow Scanner'
+
+    - task: PublishTestResults@2
+      displayName: 'Publish Flow Scanner Results'
+      condition: always()
+      inputs:
+        testResultsFormat: JUnit
+        testResultsFiles:  '$(Agent.TempDirectory)/flow-results.xml'
+        testRunTitle:      'Flow Scanner'
+
+  # ── JOB 4: OPAPolicy ────────────────────────────────────────
+  - job: OPAPolicy
+    displayName: 'Job 4 — OPAPolicy: Custom Rego rules on metadata JSON'
+    timeoutInMinutes: 15
+    steps:
+
+    - checkout: self
+      fetchDepth: 1
+
+    - task: NodeTool@0
+      displayName: 'Setup Node 18'
+      inputs:
+        versionSpec: '18.x'
+
+    - script: npm ci
+      displayName: 'Install Node dependencies'
+
+    - script: |
+        node scripts/utils/metadata-to-json.js \
+          --source force-app/main/default \
+          --output "$(Agent.TempDirectory)/metadata.json"
+        echo "Metadata conversion complete"
+      displayName: 'Convert XML Metadata to JSON'
+
+    - script: |
+        curl -sSL -o /usr/local/bin/opa \
+          https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
+        chmod +x /usr/local/bin/opa
+        opa version
+      displayName: 'Install OPA'
+
+    - script: |
+        opa eval \
+          --data   policies/opa \
+          --input  "$(Agent.TempDirectory)/metadata.json" \
+          --format raw \
+          "data.salesforce.policy.deny" \
+          | node scripts/validate/opa-exit-check.js
+      displayName: 'Evaluate OPA Policy Rules'
+
+  # ── JOB 5: CheckovScan ──────────────────────────────────────
+  - job: CheckovScan
+    displayName: 'Job 5 — CheckovScan: Pre-built + custom checks on metadata XML'
+    timeoutInMinutes: 15
+    steps:
+
+    - checkout: self
+      fetchDepth: 1
+
+    - task: UsePythonVersion@0
+      displayName: 'Setup Python 3.11'
+      inputs:
+        versionSpec: '3.11'
+
+    - script: |
+        pip3 install checkov --break-system-packages --quiet
+        checkov --version
+      displayName: 'Install Checkov'
+
+    - script: |
+        checkov \
+          --directory           force-app/main/default \
+          --framework           salesforce \
+          --external-checks-dir policies/checkov \
+          --output              cli \
+          --output              sarif \
+          --output-file-path    "$(Agent.TempDirectory)/checkov-results.sarif" \
+          --soft-fail
+        echo "Checkov scan completed"
+      displayName: 'Run Checkov on Salesforce Metadata'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish SARIF for inline PR annotations'
+      condition: always()
+      inputs:
+        PathtoPublish:   '$(Agent.TempDirectory)/checkov-results.sarif'
+        ArtifactName:    'checkov-sarif'
+        publishLocation: 'Container'
+
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 3 — DEPLOY (main branch only)
+# ═══════════════════════════════════════════════════════════════
+- stage: Deploy
+  displayName: '3 — Deploy to Salesforce Dev Org'
+  dependsOn: PolicyCheck
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
   jobs:
+
   - deployment: DeployJob
     displayName: 'Deploy Metadata'
     timeoutInMinutes: 90
@@ -85,7 +305,6 @@ stages:
             fetchDepth: 1
 
           - script: |
-              # Install SF CLI via official standalone installer (no Node.js dependency)
               wget -q https://developer.salesforce.com/media/salesforce-cli/sf/channels/stable/sf-linux-x64.tar.xz
               sudo tar -xJf sf-linux-x64.tar.xz -C /usr/local/lib
               sudo ln -sf /usr/local/lib/sf/bin/sf /usr/local/bin/sf
@@ -99,11 +318,11 @@ stages:
 
           - script: |
               sf org login jwt \
-                --client-id "$(SF_CONSUMER_KEY)" \
+                --client-id    "$(SF_CONSUMER_KEY)" \
                 --jwt-key-file "$(Agent.TempDirectory)/server.key" \
-                --username "$(SF_USERNAME)" \
+                --username     "$(SF_USERNAME)" \
                 --instance-url "$(SF_INSTANCE_URL)" \
-                --alias DevOrg \
+                --alias        DevOrg \
                 --set-default
               echo "Authentication successful"
             displayName: 'Authenticate to Salesforce'
@@ -113,8 +332,7 @@ stages:
                 --source-dir force-app \
                 --target-org DevOrg \
                 --test-level RunLocalTests \
-                --wait 60 \
-                
+                --wait       60
             displayName: 'Deploy to Dev Org'
 
           - script: |

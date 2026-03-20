@@ -1,0 +1,19 @@
+# .forceignore — metadata excluded from all deployments
+
+# Salesforce tooling artifacts
+.sfdx/
+.sf/
+node_modules/
+
+# Sensitive / environment-specific — never deploy from source control
+**/namedCredentials/**
+**/customMetadata/Env_Config*
+
+# Pipeline output artifacts
+**/test-results/**
+**/coverage/**
+/tmp/
+
+# Policy files — not Salesforce metadata
+policies/
+scripts/

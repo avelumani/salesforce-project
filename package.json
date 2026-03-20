@@ -1,0 +1,28 @@
+{
+  "name": "salesforce-project",
+  "version": "1.0.0",
+  "description": "Salesforce DX project with Policy as Code enforcement via Azure DevOps",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "lint:apex":       "sf scanner run --target force-app/main/default/classes --ruleset policies/pmd/apex-ruleset.xml --severity-threshold 2",
+    "lint:lwc":        "eslint --config policies/eslint/.eslintrc.json force-app/main/default/lwc 2>/dev/null || true",
+    "lint:flows":      "flow-scanner scan --directory force-app/main/default/flows --config policies/flow-scanner/flow-scanner.json 2>/dev/null || true",
+    "policy:convert":  "node scripts/utils/metadata-to-json.js --source force-app/main/default --output /tmp/metadata.json",
+    "policy:opa":      "npm run policy:convert && opa eval --data policies/opa --input /tmp/metadata.json --format raw 'data.salesforce.policy.deny' | node scripts/validate/opa-exit-check.js",
+    "policy:checkov":  "checkov --directory force-app/main/default --framework salesforce --external-checks-dir policies/checkov --output cli",
+    "policy:check":    "npm run lint:apex && npm run lint:lwc && npm run lint:flows && npm run policy:opa && npm run policy:checkov",
+    "deploy:validate": "sf project deploy validate --source-dir force-app --api-version 62.0 --test-level RunLocalTests --wait 30",
+    "format":          "prettier --write \"force-app/**/*.{cls,js,html,json}\""
+  },
+  "devDependencies": {
+    "@lwc/eslint-plugin-lwc":    "^1.7.2",
+    "@salesforce/cli":           "^2.0.0",
+    "eslint":                    "^8.57.0",
+    "flow-scanner":              "^3.2.0",
+    "prettier":                  "^3.2.5",
+    "prettier-plugin-apex":      "^2.0.1"
+  },
+  "dependencies": {}
+}

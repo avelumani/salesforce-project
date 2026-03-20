@@ -1,0 +1,22 @@
+{
+  "trailingComma": "none",
+  "tabWidth": 4,
+  "semi": true,
+  "singleQuote": true,
+  "printWidth": 100,
+  "apexInsertFinalNewline": true,
+  "overrides": [
+    {
+      "files": "*.{cls,trigger}",
+      "options": { "parser": "apex" }
+    },
+    {
+      "files": "*.html",
+      "options": { "parser": "html" }
+    },
+    {
+      "files": "*.{json,yml,yaml}",
+      "options": { "tabWidth": 2 }
+    }
+  ]
+}

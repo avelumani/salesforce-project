@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  policies/pmd/apex-ruleset.xml
+  PMD rules for static analysis of Apex code.
+
+  Severity 1 = Critical  → always blocks pipeline
+  Severity 2 = High      → blocks pipeline (--severity-threshold 2)
+  Severity 3 = Medium    → warning only, does not block
+-->
+<ruleset name="Salesforce Apex Policy Ruleset"
+  xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+    https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+  <description>Apex static analysis rules enforced in CI/CD Stage 2</description>
+
+  <!-- ══ SECURITY — Critical (Sev 1) ══════════════════════════ -->
+  <!-- Prevents SOQL injection via dynamic queries -->
+  <rule ref="category/apex/security.xml/ApexSOQLInjection">
+    <priority>1</priority>
+  </rule>
+  <!-- Ensures every class declares with/without/inherited sharing -->
+  <rule ref="category/apex/security.xml/ApexSharingViolations">
+    <priority>1</priority>
+  </rule>
+  <!-- Blocks reflected XSS from URL params in Visualforce -->
+  <rule ref="category/apex/security.xml/ApexXSSFromURLParam">
+    <priority>1</priority>
+  </rule>
+
+  <!-- ══ SECURITY — High (Sev 2) ══════════════════════════════ -->
+  <!-- Prevents callouts over plain HTTP -->
+  <rule ref="category/apex/security.xml/ApexInsecureEndpoint">
+    <priority>2</priority>
+  </rule>
+  <!-- Prevents open redirect vulnerabilities -->
+  <rule ref="category/apex/security.xml/ApexOpenRedirect">
+    <priority>2</priority>
+  </rule>
+
+  <!-- ══ PERFORMANCE — Critical (Sev 1) ═══════════════════════ -->
+  <!-- No SOQL queries inside for/while loops -->
+  <rule ref="category/apex/performance.xml/AvoidSoqlInLoops">
+    <priority>1</priority>
+  </rule>
+  <!-- No SOSL queries inside loops -->
+  <rule ref="category/apex/performance.xml/AvoidSoslInLoops">
+    <priority>1</priority>
+  </rule>
+  <!-- No DML (insert/update/delete) inside loops -->
+  <rule ref="category/apex/performance.xml/AvoidDmlStatementsInLoops">
+    <priority>1</priority>
+  </rule>
+
+  <!-- ══ BEST PRACTICES — High (Sev 2) ════════════════════════ -->
+  <!-- Test methods must have at least one System.assert -->
+  <rule ref="category/apex/bestpractices.xml/ApexUnitTestClassShouldHaveAsserts">
+    <priority>2</priority>
+  </rule>
+  <!-- Test classes must NOT use @isTest(SeeAllData=true) -->
+  <rule ref="category/apex/bestpractices.xml/ApexUnitTestShouldNotUseSeeAllDataTrue">
+    <priority>2</priority>
+  </rule>
+  <!-- Trigger logic must be in a handler class, not inline -->
+  <rule ref="category/apex/bestpractices.xml/AvoidLogicInTrigger">
+    <priority>2</priority>
+  </rule>
+
+  <!-- ══ ERROR PRONE — High (Sev 2) ═══════════════════════════ -->
+  <!-- Empty catch blocks silently swallow exceptions -->
+  <rule ref="category/apex/errorprone.xml/EmptyCatchBlock">
+    <priority>2</priority>
+  </rule>
+  <!-- Constructor name matching class name causes confusion -->
+  <rule ref="category/apex/errorprone.xml/MethodWithSameNameAsEnclosingClass">
+    <priority>2</priority>
+  </rule>
+
+  <!-- ══ CODE STYLE — Medium/Warning (Sev 3) ══════════════════ -->
+  <!-- System.debug without LoggingLevel leaks info in production -->
+  <rule ref="category/apex/bestpractices.xml/DebugsShouldUseLoggingLevel">
+    <priority>3</priority>
+  </rule>
+  <!-- global modifier is rarely needed; prefer public -->
+  <rule ref="category/apex/bestpractices.xml/AvoidGlobalModifier">
+    <priority>3</priority>
+  </rule>
+  <rule ref="category/apex/codestyle.xml/ClassNamingConventions">
+    <priority>3</priority>
+  </rule>
+  <rule ref="category/apex/codestyle.xml/MethodNamingConventions">
+    <priority>3</priority>
+  </rule>
+
+</ruleset>

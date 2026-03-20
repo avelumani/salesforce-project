@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  force-app/main/default/permissionsets/HelloWorld_User.permissionset-meta.xml
+
+  Policy-compliant Permission Set — OPA & Checkov scan this file:
+    ✅ ModifyAllData  explicitly false  (OPA SEC-001 / CKV_SFO_001)
+    ✅ ViewAllData    explicitly false  (OPA SEC-002 / CKV_SFO_002)
+    ✅ ManageUsers    explicitly false  (OPA SEC-003 / CKV_SFO_003)
+    ✅ description present             (Checkov CKV2_SFO_001)
+    ✅ Granular object + class access only
+-->
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Grants standard users access to run HelloWorld features. No system-wide data permissions. Assigned to Salesforce internal users only.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>HelloWorld User</label>
+    <license>Salesforce</license>
+
+    <!-- Object permissions — minimum required -->
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>false</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>false</modifyAllRecords>
+        <viewAllRecords>false</viewAllRecords>
+        <object>Contact</object>
+    </objectPermissions>
+
+    <!-- Apex class access -->
+    <classAccesses>
+        <apexClass>HelloWorld</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+
+    <!-- User permissions — minimum set, dangerous ones explicitly blocked -->
+    <userPermissions>
+        <enabled>false</enabled>
+        <n>ModifyAllData</n>
+    </userPermissions>
+    <userPermissions>
+        <enabled>false</enabled>
+        <n>ViewAllData</n>
+    </userPermissions>
+    <userPermissions>
+        <enabled>false</enabled>
+        <n>ManageUsers</n>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <n>RunReports</n>
+    </userPermissions>
+
+</PermissionSet>
