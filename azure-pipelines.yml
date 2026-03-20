@@ -99,7 +99,7 @@ stages:
       inputs:
         versionSpec: '18.x'
 
-    - script: npm ci
+    - script: npm install
       displayName: 'Install Node dependencies'
 
     - script: |
@@ -135,7 +135,7 @@ stages:
       inputs:
         versionSpec: '18.x'
 
-    - script: npm ci
+    - script: npm install
       displayName: 'Install Node dependencies'
 
     - script: |
@@ -176,7 +176,7 @@ stages:
       inputs:
         versionSpec: '18.x'
 
-    - script: npm ci
+    - script: npm install
       displayName: 'Install Node dependencies'
 
     - script: |
@@ -217,7 +217,7 @@ stages:
       inputs:
         versionSpec: '18.x'
 
-    - script: npm ci
+    - script: npm install
       displayName: 'Install Node dependencies'
 
     - script: |
