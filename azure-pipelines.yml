@@ -315,22 +315,25 @@ stages:
       displayName: 'Install Checkov'
 
     - script: |
+        # --output-file-path is a DIRECTORY — Checkov writes results_sarif.sarif inside it
+        mkdir -p "$(Agent.TempDirectory)/checkov-out"
         checkov \
           --directory           force-app/main/default \
           --framework           salesforce \
           --external-checks-dir policies/checkov \
           --output              cli \
           --output              sarif \
-          --output-file-path    "$(Agent.TempDirectory)/checkov-results.sarif" \
+          --output-file-path    "$(Agent.TempDirectory)/checkov-out" \
           --soft-fail
         echo "Checkov scan completed"
+        ls -la "$(Agent.TempDirectory)/checkov-out/"
       displayName: 'Run Checkov on Salesforce Metadata'
 
     - task: PublishBuildArtifacts@1
       displayName: 'Publish SARIF — inline PR annotations'
       condition: always()
       inputs:
-        PathtoPublish:   '$(Agent.TempDirectory)/checkov-results.sarif'
+        PathtoPublish:   '$(Agent.TempDirectory)/checkov-out/results_sarif.sarif'
         ArtifactName:    'checkov-sarif'
         publishLocation: 'Container'
 
